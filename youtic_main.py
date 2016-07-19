@@ -35,7 +35,6 @@ parser.add_argument(
 )
 
 PRICE_NORMALIZER_RE = re.compile("€?([0-9]+)[.,]([0-9]+)")
-SIZE_NORMALIZER_RE = re.compile("([0-9]+)[.,]([0-9]+)")
 CLIENT_FILENAME_NORMALIZER_RE = re.compile("[_ ]+")
 
 CLIENT_INPUT_DATA_CACHE = {}
@@ -134,6 +133,9 @@ def main():
             log.info("Product ID {} not found in client data.".format(row.loc[C_PRODUCT_ID]))
             # Not found
             row.loc[C_STATUS] = "D"
+            row.loc[C_INVENTORY_TRACKING] = "B"
+            row.loc[C_OPTIONS] = ""
+
         else:
             assert len(client_data_list) > 0
 
@@ -142,44 +144,39 @@ def main():
                 # Found but value in availability or error
                 log.info("Product ID {} found but no availability or in error.".format(row.loc[C_PRODUCT_ID]))
                 row.loc[C_STATUS] = "D"
+                row.loc[C_INVENTORY_TRACKING] = "B"
+                row.loc[C_OPTIONS] = ""
             else:
                 log.info("Product ID {} found in client data...".format(row.loc[C_PRODUCT_ID]))
                 row.loc[C_STATUS] = "A"
                 row.loc[C_PRICE] = client_data.get('Price')
                 row.loc[C_LANGUAGE] = "fr"
                 row.loc[C_QUANTITY] = "1"
+                row.loc[C_INVENTORY_TRACKING] = "B"
 
-                if len(client_data_list) == 1:
-                    # If only one line (so no option)
-                    log.info(".. just one line--> C_INVENTORY_TRACKING = B.".format(row.loc[C_PRODUCT_ID]))
-                    row.loc[C_INVENTORY_TRACKING] = "B"
-                else:
-                    # If more than 1 line (So more multiple options)
-                    log.info(".. multiple line --> C_INVENTORY_TRACKING = O.".format(row.loc[C_PRODUCT_ID]))
-                    row.loc[C_INVENTORY_TRACKING] = "O"
-                    options = defaultdict(lambda: set())
-                    for client_data in client_data_list:
-                        for key, value in client_data.items():
-                            if key not in ["Availability", 'error', 'pageUrl', 'Price']:
-                                if key == "Size":
-                                    value = re.sub(SIZE_NORMALIZER_RE, "\g<1>.\g<2>", value)
-                                options[key].add(value)
+                options = defaultdict(lambda: list())
+                for client_data in client_data_list:
+                    for key, value in client_data.items():
+                        if value is None:
+                            continue
+                        if key not in ["Availability", 'error', 'pageUrl', 'Price']:
+                            row.loc[C_INVENTORY_TRACKING] = "O"
+                            value = value.replace(",", ".")
+                            options[key].append(value)
 
-                                combination_row = {
-                                    youtic_combinations_csvdef.C_PRODUCT_ID: row.loc[C_PRODUCT_ID],
-                                    youtic_combinations_csvdef.C_COMBINATION_CODE: "",
-                                    youtic_combinations_csvdef.C_COMBINATION: "{}: {}".format(key, value),
-                                    youtic_combinations_csvdef.C_AMOUNT: "1",
-                                    youtic_combinations_csvdef.C_LANGUAGE: row.loc[C_LANGUAGE],
-                                }
-                                youtic_combinations_output = youtic_combinations_output.append(combination_row, ignore_index=True, verify_integrity=True)
-                    # end for
-                    log.info("Found {} options.".format(len(options)))
-                    combination = "; ".join(
-                        ["{}: S[{}]".format(option_key, ", ".join(option_set)) for option_key, option_set in options.items()])
-                    row.loc[C_OPTIONS] = combination
-
-
+                            combination_row = {
+                                youtic_combinations_csvdef.C_PRODUCT_ID: row.loc[C_PRODUCT_ID],
+                                youtic_combinations_csvdef.C_COMBINATION_CODE: "",
+                                youtic_combinations_csvdef.C_COMBINATION: "{}: {}".format(key, value),
+                                youtic_combinations_csvdef.C_AMOUNT: "1",
+                                youtic_combinations_csvdef.C_LANGUAGE: row.loc[C_LANGUAGE],
+                            }
+                            youtic_combinations_output = youtic_combinations_output.append(combination_row, ignore_index=True, verify_integrity=True)
+                # end for
+                log.info("Found {} options.".format(len(options)))
+                combination = "; ".join(
+                    ["{}: S[{}]".format(option_key, ", ".join(option_set)) for option_key, option_set in options.items()])
+                row.loc[C_OPTIONS] = combination
             # end if
         # end if not client_data_list
 
