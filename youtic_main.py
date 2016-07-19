@@ -48,7 +48,7 @@ def read_client_input_data(filename):
         log.info("Read {} client data in file {}.".format(len(input_data), filename))
         CLIENT_INPUT_DATA_CACHE[filename] = input_data
     else:
-        log.info("Using cached client data for {}.".format(filename))
+        log.debug("Using cached client data for {}.".format(filename))
     return input_data
 
 
@@ -99,7 +99,7 @@ def main():
 
     logging.basicConfig(
         filename='{}.log'.format(os.path.basename(__file__)),
-        level=logging.DEBUG
+        level=logging.INFO
     )
 
     args = parser.parse_args()
@@ -129,25 +129,25 @@ def main():
 
         youtic_products_output.append(row)
 
+        log.info("Product ID={} pageUrl={}:".format(row.loc[C_PRODUCT_ID], page_url))
         if not client_data_list:
-            log.info("Product ID {} not found in client data.".format(row.loc[C_PRODUCT_ID]))
+            log.info("\tNot found in client data.")
             # Not found
             row.loc[C_STATUS] = "D"
             row.loc[C_INVENTORY_TRACKING] = "B"
             row.loc[C_OPTIONS] = ""
-
         else:
             assert len(client_data_list) > 0
 
             client_data = client_data_list[0]
             if bool(client_data.get('error')) or bool(client_data.get('Availability')):
                 # Found but value in availability or error
-                log.info("Product ID {} found but no availability or in error.".format(row.loc[C_PRODUCT_ID]))
+                log.info("\tFound in client data but no availability or in error.")
                 row.loc[C_STATUS] = "D"
                 row.loc[C_INVENTORY_TRACKING] = "B"
                 row.loc[C_OPTIONS] = ""
             else:
-                log.info("Product ID {} found in client data...".format(row.loc[C_PRODUCT_ID]))
+                log.info("\tFound in client data {}.".format(client_input_filename))
                 row.loc[C_STATUS] = "A"
                 row.loc[C_PRICE] = client_data.get('Price')
                 row.loc[C_LANGUAGE] = "fr"
@@ -160,7 +160,7 @@ def main():
                         if value is None:
                             continue
                         if key not in ["Availability", 'error', 'pageUrl', 'Price']:
-                            row.loc[C_INVENTORY_TRACKING] = "O"
+
                             value = value.replace(",", ".")
                             options[key].append(value)
 
@@ -173,7 +173,14 @@ def main():
                             }
                             youtic_combinations_output = youtic_combinations_output.append(combination_row, ignore_index=True, verify_integrity=True)
                 # end for
-                log.info("Found {} options.".format(len(options)))
+                if not len(options):
+                    # Not options found
+                    log.info("\tNo option found")
+                    row.loc[C_INVENTORY_TRACKING] = "B"
+                else:
+                    # Options found
+                    row.loc[C_INVENTORY_TRACKING] = "O"
+                    log.info("\tFound {} values in {} options.".format(sum(len(i) for i in options.values()), len(options)))
                 combination = "; ".join(
                     ["{}: S[{}]".format(option_key, ", ".join(option_set)) for option_key, option_set in options.items()])
                 row.loc[C_OPTIONS] = combination
