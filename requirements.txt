@@ -1,6 +1,7 @@
 pandas==0.18.1
 anyconfig==0.6.0
 tqdm==4.7.4
+ordered-set==2.0.1
 
 
 # dist

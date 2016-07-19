@@ -4,14 +4,12 @@ from __future__ import (absolute_import, division,
 import pandas
 
 C_PRODUCT_ID = "Product id"
-C_COMBINATION_CODE = "Combination code"
 C_COMBINATION = "Combination"
 C_AMOUNT = "Amount"
 C_LANGUAGE = "Language"
 
 CSV_COLUMN_LIST = [
     C_PRODUCT_ID,
-    C_COMBINATION_CODE,
     C_COMBINATION,
     C_AMOUNT,
     C_LANGUAGE,

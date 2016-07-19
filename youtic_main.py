@@ -6,6 +6,8 @@ import logging
 from collections import defaultdict
 
 from itertools import zip_longest, groupby
+
+from ordered_set import OrderedSet
 from tqdm import tqdm
 
 import pandas
@@ -139,52 +141,64 @@ def main():
         else:
             assert len(client_data_list) > 0
 
-            client_data = client_data_list[0]
-            if bool(client_data.get('error')) or bool(client_data.get('Availability')):
-                # Found but value in availability or error
-                log.info("\tFound in client data but no availability or in error.")
-                row.loc[C_STATUS] = "D"
-                row.loc[C_INVENTORY_TRACKING] = "B"
-                row.loc[C_OPTIONS] = ""
-            else:
-                log.info("\tFound in client data {}.".format(client_input_filename))
+            log.info("\tFound in client data {}.".format(client_input_filename))
+            row.loc[C_STATUS] = "D"
+            row.loc[C_LANGUAGE] = "fr"
+            row.loc[C_QUANTITY] = "1"
+
+            global_options = defaultdict(lambda: OrderedSet())
+            client_data = None
+            for index, client_data in enumerate(client_data_list):
+                if bool(client_data.get('error')) or bool(client_data.get('Availability')):
+                    # Found but value in availability or error
+                    log.info("\tMatching line #{} --> no availability or in error.".format(index))
+                    continue
+                options = dict()
+                log.info("\tProcessing matching line #{}.".format(index))
+                for key, value in client_data.items():
+                    if value is None:
+                        log.debug("\t\tkey {} --> no value.".format(key))
+                        continue
+                    if key not in ["Availability", 'error', 'pageUrl', 'Price']:
+                        value = value.replace(",", ".")
+                        log.info("\t\tFound option {} value {}.".format(key, value))
+                        options[key] = value
+                        global_options[key].add(value)
+                    # end if
+                # end for
+                combination = ", ".join(["{}: {}".format(key, value) for key, value in options.items()])
+                combination_row = {
+                    youtic_combinations_csvdef.C_PRODUCT_ID: row.loc[C_PRODUCT_ID],
+                    youtic_combinations_csvdef.C_COMBINATION: combination,
+                    youtic_combinations_csvdef.C_AMOUNT: "1",
+                    youtic_combinations_csvdef.C_LANGUAGE: row.loc[C_LANGUAGE],
+                }
+                youtic_combinations_output = youtic_combinations_output.append(
+                    combination_row, ignore_index=True, verify_integrity=True)
+
+
+            # end for
+            if client_data is not None:
+                log.info("\tFound at least one client data so setting Status to A and setting Price.")
                 row.loc[C_STATUS] = "A"
                 row.loc[C_PRICE] = client_data.get('Price')
-                row.loc[C_LANGUAGE] = "fr"
-                row.loc[C_QUANTITY] = "1"
+            if not len(global_options):
+                # Not options found
                 row.loc[C_INVENTORY_TRACKING] = "B"
+                log.info("\tNo option found so setting Inventory tracking to B.")
+            else:
+                # Options found
+                row.loc[C_INVENTORY_TRACKING] = "O"
+                log.info("\tFound {} values in {} options so setting Inventory tracking to O.".format(
+                    sum(len(i) for i in global_options.values()),
+                    len(global_options)
+                ))
 
-                options = defaultdict(lambda: list())
-                for client_data in client_data_list:
-                    for key, value in client_data.items():
-                        if value is None:
-                            continue
-                        if key not in ["Availability", 'error', 'pageUrl', 'Price']:
+            combination = "; ".join(
+                ["{}: S[{}]".format(option_key, ",".join(option_set)) for option_key, option_set in global_options.items()])
+            row.loc[C_OPTIONS] = combination
+            log.info("\tSetting Combination to {}.".format(combination))
 
-                            value = value.replace(",", ".")
-                            options[key].append(value)
-
-                            combination_row = {
-                                youtic_combinations_csvdef.C_PRODUCT_ID: row.loc[C_PRODUCT_ID],
-                                youtic_combinations_csvdef.C_COMBINATION_CODE: "",
-                                youtic_combinations_csvdef.C_COMBINATION: "{}: {}".format(key, value),
-                                youtic_combinations_csvdef.C_AMOUNT: "1",
-                                youtic_combinations_csvdef.C_LANGUAGE: row.loc[C_LANGUAGE],
-                            }
-                            youtic_combinations_output = youtic_combinations_output.append(combination_row, ignore_index=True, verify_integrity=True)
-                # end for
-                if not len(options):
-                    # Not options found
-                    log.info("\tNo option found")
-                    row.loc[C_INVENTORY_TRACKING] = "B"
-                else:
-                    # Options found
-                    row.loc[C_INVENTORY_TRACKING] = "O"
-                    log.info("\tFound {} values in {} options.".format(sum(len(i) for i in options.values()), len(options)))
-                combination = "; ".join(
-                    ["{}: S[{}]".format(option_key, ", ".join(option_set)) for option_key, option_set in options.items()])
-                row.loc[C_OPTIONS] = combination
-            # end if
         # end if not client_data_list
 
         youtic_products_output = youtic_products_output.append(row, ignore_index=True, verify_integrity=True)
