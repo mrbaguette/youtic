@@ -2,7 +2,7 @@
 
 set -e
 
-version="v1"
+version="v3"
 
 . venv/bin/activate
 pyinstaller -F -y youtic.spec
