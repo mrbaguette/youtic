@@ -117,7 +117,10 @@ def main():
 
     for _, row in tqdm(list(youtic_products_input.iterrows())):
         client_id = row.loc[C_VENDOR]
-        client_input_filename = "a-{}.json".format(re.sub(CLIENT_FILENAME_NORMALIZER_RE, "_", client_id.lower()))
+        client_input_filename = os.path.join(
+            input_directory,
+            "a-{}.json".format(re.sub(CLIENT_FILENAME_NORMALIZER_RE, "_", client_id.lower()))
+        )
 
         client_input = read_client_input_data(client_input_filename)
 
